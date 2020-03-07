@@ -44,11 +44,6 @@ void on_large_pages(const Option& o) { TT.resize(o); }
 void on_logger(const Option& o) { start_logger(o); }
 void on_threads(const Option& o) { Threads.set(o); }
 void on_tb_path(const Option& o) { Tablebases::init(o); }
-//livebook begin
-void on_livebook_url(const Option& o) { Search::setLiveBookURL(o); }
-void on_livebook_timeout(const Option& o) { Search::setLiveBookTimeout(o); }
-void on_livebook_depth(const Option& o) { Search::set_livebook_depth(o); }
-//livebook end
 void on_book_file(const Option& o) { polybook.init(o); }
 void on_book_file2(const Option& o) { polybook2.init(o); }
 void on_best_book_move(const Option& o) { polybook.set_best_book_move(o); }
@@ -93,12 +88,6 @@ void init(OptionsMap& o) {
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
   o["Read only learning"]      << Option(false);
-  o["Live Book"]             << Option(false);
-  o["Live Book URL"]         << Option("http://www.chessdb.cn/cdb.php", on_livebook_url);
-  o["Live Book Timeout"]     << Option(5000, 0, 10000, on_livebook_timeout);
-  o["Live Book Diversity"]   << Option(false);
-  o["Live Book Contribute"]  << Option(false);
-  o["Live Book Depth"]       << Option(100, 1, 100, on_livebook_depth);
   o["BookFile"]              << Option("<empty>", on_book_file);
   o["BookFile2"]             << Option("<empty>", on_book_file2);
   o["BestBookMove"]          << Option(true, on_best_book_move);
