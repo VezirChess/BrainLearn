@@ -38,14 +38,6 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
-//livebook begin
-#define CURL_STATICLIB
-extern "C" {
-#include <curl/curl.h>
-}
-#undef min
-#undef max
-//livebook end
 
 //kelly begin
 bool useLearning = true;
@@ -207,59 +199,19 @@ namespace {
 
 
 /// Search::init() is called at startup to initialize various lookup tables
-//livebook begin
-CURL *g_cURL;
-std::string g_szRecv;
-std::string g_livebookURL = "http://www.chessdb.cn/cdb.php";
-bool g_inBook;
-int livebook_depth_count=0;
-int max_book_depth;
 
-size_t cURL_WriteFunc(void *contents, size_t size, size_t nmemb, std::string *s)
-{
-	size_t newLength = size * nmemb;
-	try
-	{
-		s->append((char*)contents, newLength);
-	}
-	catch (std::bad_alloc &e)
-	{
-		//handle memory problem
-		return 0;
-	}
-	return newLength;
-}
-void Search::setLiveBookURL(const std::string &newURL) {
-	g_livebookURL = newURL;
-}
-void Search::setLiveBookTimeout(size_t newTimeoutMS) {
-	curl_easy_setopt(g_cURL, CURLOPT_TIMEOUT_MS, newTimeoutMS);
-}
-void Search::set_livebook_depth(int book_depth) {
-    max_book_depth = book_depth;
-}
-//livebook end
 void Search::init() {
 
   for (int i = 1; i < MAX_MOVES; ++i)
       Reductions[i] = int((24.8 + std::log(Threads.size()) / 2) * std::log(i));
-
-  //livebook begin
-  curl_global_init(CURL_GLOBAL_DEFAULT);
-  g_cURL = curl_easy_init();
-  curl_easy_setopt(g_cURL, CURLOPT_TIMEOUT_MS, 1000L);
-  curl_easy_setopt(g_cURL, CURLOPT_WRITEFUNCTION, cURL_WriteFunc);
-  curl_easy_setopt(g_cURL, CURLOPT_WRITEDATA, &g_szRecv);
-  g_inBook = true;
-  //livebook end
 }
+
 /// Search::clear() resets search state to its initial value
 
 void Search::clear() {
 
   Threads.main()->wait_for_search_finished();
 
-  g_inBook = true;//livebook
   Time.availableNodes = 0;
   TT.clear();
   Threads.clear();
@@ -311,30 +263,7 @@ void MainThread::search() {
               bookMove = polybook2.probe(rootPos);
 	  if(!bookMove)
 	  {
-	    //Live Book begin
-	    if (rootPos.key() == 0xB4D30CD15A43432D)
-	      livebook_depth_count=0;
-	    if (Options["Live Book"] && g_inBook && (livebook_depth_count < max_book_depth))
-	    {
-	      CURLcode res;
-	      char *szFen = curl_easy_escape(g_cURL, rootPos.fen().c_str(), 0);
-	      std::string szURL = g_livebookURL + "?action=" + (Options["Live Book Diversity"] ? "query" : "querybest") + "&board=" + szFen;
-	      curl_free(szFen);
-	      curl_easy_setopt(g_cURL, CURLOPT_URL, szURL.c_str());
-	      g_szRecv.clear();
-	      res = curl_easy_perform(g_cURL);
-	      if (res == CURLE_OK)
-	      {
-		g_szRecv.erase(std::find(g_szRecv.begin(), g_szRecv.end(), '\0'), g_szRecv.end());
-		if (g_szRecv.find("move:") != std::string::npos)
-		{
-		  std::string tmp = g_szRecv.substr(5);
-		  bookMove = UCI::to_move(rootPos, tmp);
-		  livebook_depth_count++;
-		}
-	      }
-	    }
-	    //Live Book end
+	    
 	  }
       }
       if (bookMove && std::count(rootMoves.begin(), rootMoves.end(), bookMove))
@@ -443,16 +372,7 @@ void MainThread::search() {
       std::cout << " ponder " << UCI::move(bestThread->rootMoves[0].pv[1], rootPos.is_chess960());
 
   std::cout << sync_endl;
-  //livebook begin
-  if (Options["Live Book"] && Options["Live Book Contribute"] && !g_inBook)
-  {
-    char *szFen = curl_easy_escape(g_cURL, rootPos.fen().c_str(), 0);
-    std::string szURL = g_livebookURL + "?action=store" + "&board=" + szFen + "&move=move:" + UCI::move(bestThread->rootMoves[0].pv[0], rootPos.is_chess960());
-    curl_free(szFen);
-    curl_easy_setopt(g_cURL, CURLOPT_URL, szURL.c_str());
-    curl_easy_perform(g_cURL);
-  }
-  //livebook end
+
 }
 
 
