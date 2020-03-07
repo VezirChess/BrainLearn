@@ -38,14 +38,6 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
-//livebook begin
-#define CURL_STATICLIB
-extern "C" {
-#include <curl/curl.h>
-}
-#undef min
-#undef max
-//livebook end
 
 //kelly begin
 bool useLearning = true;
