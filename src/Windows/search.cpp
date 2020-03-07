@@ -987,6 +987,7 @@ namespace {
         && !gameCycle
         &&  abs(eval) < 2 * VALUE_KNOWN_WIN)
 	
+      }	
       else //learning
       {
 	// Never assume anything on values stored in Global Learning Table
