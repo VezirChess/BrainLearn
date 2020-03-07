@@ -765,7 +765,7 @@ namespace {
     Depth extension, newDepth;
     //from Kelly begin
     Value bestValue, value, ttValue, eval=VALUE_NONE, maxValue, expTTValue=VALUE_NONE;
-    bool ttHit, ttPv, inCheck, givesCheck, improving, didLMR, priorCapture, expTTHit=false;
+    bool ttHit, ttPv, inCheck, givesCheck, improving, didLMR, priorCapture, gameCycle, expTTHit=false;
     //from Kelly End
     bool captureOrPromotion, doFullDepthSearch, moveCountPruning, ttCapture, singularLMR;
     Piece movedPiece;
@@ -786,6 +786,7 @@ namespace {
     moveCount = captureCount = quietCount = ss->moveCount = 0;
     bestValue = -VALUE_INFINITE;
     maxValue = VALUE_INFINITE;
+    gameCycle = false;
 
     // Check for the available remaining time
     if (thisThread == Threads.main())
@@ -797,6 +798,21 @@ namespace {
 
     if (!rootNode)
     {
+        // Check if we have an upcoming move which draws by repetition, or
+        // if the opponent had an alternative move earlier to this position.
+        if (pos.has_game_cycle(ss->ply))
+        {
+            if (VALUE_DRAW >= beta)
+            {
+                tte->save(posKey, VALUE_DRAW, ttPv, BOUND_EXACT,
+                          depth, MOVE_NONE, VALUE_NONE);
+
+                return VALUE_DRAW;
+            }
+            gameCycle = true;
+            alpha = std::max(alpha, VALUE_DRAW);
+        }
+
         // Step 2. Check for aborted search and immediate draw
         if (   Threads.stop.load(std::memory_order_relaxed)
             || pos.is_draw(ss->ply)
@@ -853,6 +869,7 @@ namespace {
     // At non-PV nodes we check for an early TT cutoff
     if (  !PvNode
         && ttHit
+	&& !gameCycle
         && tte->depth() >= depth
         && ttValue != VALUE_NONE // Possible in case of TT access race
         && (ttValue >= beta ? (tte->bound() & BOUND_LOWER)
@@ -1045,6 +1062,19 @@ namespace {
 	    ss->staticEval = eval = -(ss-1)->staticEval + 2 * Tempo;
 	tte->save(posKey, VALUE_NONE, ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
       }
+      
+      if (gameCycle)
+        ss->staticEval = eval = ss->staticEval * std::max(0, (100 - pos.rule50_count())) / 100;
+
+    improving =  (ss-2)->staticEval == VALUE_NONE ? (ss->staticEval > (ss-4)->staticEval
+              || (ss-4)->staticEval == VALUE_NONE) : ss->staticEval > (ss-2)->staticEval;
+
+    // Begin early pruning.
+    if (   !PvNode
+        && !excludedMove
+        && !gameCycle
+        &&  abs(eval) < 2 * VALUE_KNOWN_WIN)
+	
       else //learning
       {
 	// Never assume anything on values stored in Global Learning Table
@@ -1285,6 +1315,9 @@ moves_loop: // When in check, search starts from here
       }
 
       // Step 14. Extensions (~75 Elo)
+      if (   gameCycle
+          && (depth < 5 || PvNode))
+          extension = (2 - (ss->ply % 2 == 0 && !PvNode));
 
       // Singular extension search (~70 Elo). If all moves but one fail low on a
       // search of (alpha-s, beta-s), and just one fails high on (alpha, beta),
@@ -1293,6 +1326,7 @@ moves_loop: // When in check, search starts from here
       // result is lower than ttValue minus a margin then we will extend the ttMove.
       if (    depth >= 6
           &&  move == ttMove
+	  && !gameCycle
           && !rootNode
           && !excludedMove // Avoid recursive singular search
        /* &&  ttValue != VALUE_NONE Already implicit in the next condition */
@@ -1368,6 +1402,7 @@ moves_loop: // When in check, search starts from here
       // re-searched at full depth.
       if (    depth >= 3		  
 		  &&  !disableLMR //Kelly
+          && !gameCycle
           &&  moveCount > 1 + 2 * rootNode
           && (!rootNode || thisThread->best_move_count(move) == 0)
           && (  !captureOrPromotion
@@ -1615,7 +1650,7 @@ moves_loop: // When in check, search starts from here
     Move ttMove, move, bestMove;
     Depth ttDepth;
     Value bestValue, value, ttValue, futilityValue, futilityBase, oldAlpha;
-    bool ttHit, pvHit, inCheck, givesCheck, captureOrPromotion, evasionPrunable;
+    bool ttHit, pvHit, inCheck, givesCheck, captureOrPromotion, evasionPrunable, gameCycle;
     int moveCount;
 
     if (PvNode)
@@ -1630,6 +1665,16 @@ moves_loop: // When in check, search starts from here
     bestMove = MOVE_NONE;
     inCheck = pos.checkers();
     moveCount = 0;
+        gameCycle = false;
+
+    if (pos.has_game_cycle(ss->ply))
+    {
+       if (VALUE_DRAW >= beta)
+           return VALUE_DRAW;
+
+       alpha = std::max(alpha, VALUE_DRAW);
+       gameCycle = true;
+    }
 
     // Check for an immediate draw or maximum ply reached
     if (   pos.is_draw(ss->ply)
@@ -1652,6 +1697,7 @@ moves_loop: // When in check, search starts from here
 
     if (  !PvNode
         && ttHit
+	&& !gameCycle
         && tte->depth() >= ttDepth
         && ttValue != VALUE_NONE // Only in case of TT access race
         && (ttValue >= beta ? (tte->bound() & BOUND_LOWER)
