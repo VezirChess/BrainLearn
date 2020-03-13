@@ -753,7 +753,7 @@ namespace {
     Depth extension, newDepth;
     //from Kelly begin
     Value bestValue, value, ttValue, eval=VALUE_NONE, maxValue, expTTValue=VALUE_NONE;
-    bool ttHit, ttPv, inCheck, givesCheck, improving, didLMR, gameCycle, priorCapture, expTTHit=false;
+    bool ttHit, ttPv, inCheck, givesCheck, improving, didLMR, priorCapture, gameCycle, expTTHit=false;
     //from Kelly End
     bool captureOrPromotion, doFullDepthSearch, moveCountPruning, ttCapture, singularLMR;
     Piece movedPiece;
@@ -1303,10 +1303,9 @@ moves_loop: // When in check, search starts from here
       }
 
       // Step 14. Extensions (~75 Elo)
-      
       if (   gameCycle
-          && (depth < 5 * ONE_PLY || PvNode))
-          extension = (2 - (ss->ply % 2 == 0 && !PvNode)) * ONE_PLY;
+          && (depth < 5 || PvNode))
+          extension = (2 - (ss->ply % 2 == 0 && !PvNode));
 
       // Singular extension search (~70 Elo). If all moves but one fail low on a
       // search of (alpha-s, beta-s), and just one fails high on (alpha, beta),
